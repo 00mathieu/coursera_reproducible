@@ -1,0 +1,75 @@
+---
+title: "assign_1"
+author: "Mathieu Jones"
+date: "28 August 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+here_loc <- "C:/Users/00mat/Desktop/Clare_assign/reproducible"
+```
+
+## Libraries
+
+```{r}
+library(data.table); library(ggplot2)
+```
+
+
+## Import data
+
+```{r}
+# data is saved in "data" folder of 'here_loc' directory
+dat <- fread(paste(here_loc,"data","activity.csv",sep="/"))
+print(dat[1:5])
+str(dat)
+```
+
+
+## Per-day analysis
+```{r}
+
+per_day<-dat[,.(STEPS=sum(steps),na.rm=T),date]
+per_day[,.(MEAN_STEPS=mean(STEPS,na.rm=T),MEDIAN_STEPS=median(STEPS,na.rm=T))]
+ggplot(data=per_day,aes(x=STEPS))+geom_histogram(binwidth = 1000)
+
+```
+
+## Per-5min analysis
+
+```{r}
+per5 <- dat[,.(AVG_STEPS=mean(steps,na.rm=T)),interval]
+ggplot(data=per5,aes(y=AVG_STEPS,x=interval))+geom_line()
+#max no steps:
+per5[AVG_STEPS==per5[,max(AVG_STEPS)]]
+```
+
+
+## Imputing NAs
+
+```{r}
+
+dat[,.(count=.N),.(Missing=is.na(steps))]
+
+#impute NA by 5 minute interval
+dat_imputed <- copy(dat)
+dat_imputed[, steps := replace(steps, is.na(steps), median(steps, na.rm=T)), by=.(interval)]
+
+per_date_imputed <- dat_imputed[,.(STEPS_PER_DAY=sum(steps)),date]
+
+ggplot(data=per_date_imputed,aes(x=STEPS_PER_DAY))+geom_histogram(binwidth = 500)
+
+rbind(per_date_imputed[,.(NAs = "Imputed",MEAN_STEPS=mean(STEPS_PER_DAY), MEDIAN_STEPS=median(STEPS_PER_DAY))],
+per_day[,.(NAs = "Original",MEAN_STEPS=mean(STEPS,na.rm=T),MEDIAN_STEPS=median(STEPS,na.rm=T))])
+#imputing reduces the mean and the median total steps per day estimate
+```
+
+## Weekdays vs Weekends
+
+```{r}
+dat_imputed[,DAY_TYPE:=ifelse(weekdays(as.Date(date)) %in% c("Sunday","Saturday"),"weekend","weekday")]
+dat_imputed[,.N,.(weekdays(as.Date(date)),DAY_TYPE)]
+ggplot(data=dat_imputed[,.(AVG_STEPS=mean(steps)),.(interval,DAY_TYPE)], aes(x=interval, y=AVG_STEPS,group=DAY_TYPE)) + geom_line(aes(colour=DAY_TYPE))+
+    facet_grid(DAY_TYPE~.)
+```
